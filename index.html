@@ -279,6 +279,7 @@ Cancel
 </div>
 
 <script>
+    document.addEventListener('DOMContentLoaded', function() {
     const gridSizes = [
         { rows: 14, cols: 8, label: '14×8' },
         { rows: 15, cols: 9, label: '15×9' },
@@ -713,6 +714,8 @@ Cancel
         gridDisplay.style.display = 'none';
         uploadSection.style.display = 'block';
     });
+    
+    }); // End DOMContentLoaded
 </script>
 ```
 
