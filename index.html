@@ -52,12 +52,12 @@
     
     .grid-size-btn {
         padding: 20px 40px;
-        fontSize: 24px;
-        fontWeight: bold;
+        font-size: 24px;
+        font-weight: bold;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border: none;
-        borderRadius: 12px;
+        border-radius: 12px;
         cursor: pointer;
         transition: transform 0.2s;
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
@@ -72,7 +72,7 @@
         margin: 30px 0;
     }
     
-    .upload-btn {
+    .upload-btn, .manual-btn {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border: none;
@@ -83,9 +83,10 @@
         cursor: pointer;
         transition: transform 0.2s;
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        margin: 10px;
     }
     
-    .upload-btn:hover {
+    .upload-btn:hover, .manual-btn:hover {
         transform: translateY(-2px);
     }
     
@@ -109,6 +110,11 @@
         color: #333;
     }
     
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
     input[type="file"] {
         display: none;
     }
@@ -120,6 +126,7 @@
         background: #f5f5f5;
         border-radius: 8px;
         font-size: 16px;
+        display: none;
     }
     
     .grid-container {
@@ -182,6 +189,7 @@
     .manual-input {
         margin: 30px 0;
         text-align: center;
+        display: none;
     }
     
     .manual-input textarea {
@@ -227,17 +235,12 @@
         </div>
         
         <div class="upload-section" id="uploadSection">
-            <input type="file" id="fileInput" accept="image/*,.heic" capture="environment" style="display: none;">
-            <button class="upload-btn" id="uploadBtn">
-                📸 Upload Photo (Auto-Solve!)
-            </button>
-            <br>
-            <button class="btn btn-secondary" id="manualInputBtn" style="margin-top: 15px;">
-                ⌨️ Manual Input (Backup)
-            </button>
+            <input type="file" id="fileInput" accept="image/*" capture="environment">
+            <button class="upload-btn" id="uploadBtn">📸 Upload Photo</button>
+            <button class="manual-btn" id="manualBtn">⌨️ Manual Input</button>
         </div>
         
-        <div class="manual-input" id="manualInputSection" style="display: none;">
+        <div class="manual-input" id="manualInputSection">
             <p style="margin-bottom: 15px; color: #333; font-size: 16px; font-weight: 600;">
                 ⚡ Type numbers row by row:
             </p>
@@ -261,7 +264,7 @@ Cancel
 </div>
 
 ```
-        <div id="status" class="status" style="display: none;"></div>
+        <div id="status" class="status"></div>
         
         <div id="gridDisplay" style="text-align: center; display: none;">
             <div class="step-info" id="stepInfo"></div>
@@ -279,7 +282,6 @@ Cancel
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
     const gridSizes = [
         { rows: 14, cols: 8, label: '14×8' },
         { rows: 15, cols: 9, label: '15×9' },
@@ -292,7 +294,9 @@ Cancel
     let currentStep = 0;
     
     const gridSizeBtn = document.getElementById('gridSizeBtn');
-    const manualInputBtn = document.getElementById('manualInputBtn');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const manualBtn = document.getElementById('manualBtn');
+    const fileInput = document.getElementById('fileInput');
     const manualInputSection = document.getElementById('manualInputSection');
     const uploadSection = document.getElementById('uploadSection');
     const gridInput = document.getElementById('gridInput');
@@ -308,22 +312,41 @@ Cancel
     const newPuzzleBtn = document.getElementById('newPuzzleBtn');
     const inputInstructions = document.getElementById('inputInstructions');
     
-    const uploadBtn = document.getElementById('uploadBtn');
-    const fileInput = document.getElementById('fileInput');
+    // Grid size cycling
+    gridSizeBtn.onclick = function() {
+        currentSizeIndex = (currentSizeIndex + 1) % 3;
+        const size = gridSizes[currentSizeIndex];
+        gridSizeBtn.textContent = size.label;
+        inputInstructions.textContent = `Enter ${size.rows} rows of ${size.cols} numbers each. Separate numbers with spaces, press Enter for next row.`;
+    };
     
-    // Upload button triggers file input
-    uploadBtn.addEventListener('click', () => {
+    // Upload button
+    uploadBtn.onclick = function() {
         fileInput.click();
-    });
+    };
     
-    // Handle file upload
-    fileInput.addEventListener('change', async (e) => {
+    // Manual input button
+    manualBtn.onclick = function() {
+        manualInputSection.style.display = 'block';
+        uploadSection.style.display = 'none';
+        gridInput.focus();
+    };
+    
+    // Cancel button
+    cancelBtn.onclick = function() {
+        manualInputSection.style.display = 'none';
+        uploadSection.style.display = 'block';
+        gridInput.value = '';
+    };
+    
+    // File upload handler
+    fileInput.onchange = async function(e) {
         const file = e.target.files[0];
         if (!file) return;
         
         uploadSection.style.display = 'none';
         status.style.display = 'block';
-        status.textContent = '📸 Processing image with OCR...';
+        status.textContent = '📸 Processing image...';
         
         try {
             await processImageWithOCR(file);
@@ -335,90 +358,60 @@ Cancel
                 manualInputSection.style.display = 'block';
             }, 2000);
         }
-    });
+    };
     
     async function processImageWithOCR(file) {
-        status.textContent = '📸 Preparing image...';
+        status.textContent = '📸 Converting image...';
         
-        try {
-            // Convert to base64
-            const base64Image = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
+        const base64Image = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+        
+        status.textContent = '🔍 Reading numbers...';
+        
+        const formData = new FormData();
+        formData.append('base64Image', base64Image);
+        formData.append('apikey', 'helloworld');
+        formData.append('language', 'eng');
+        formData.append('OCREngine', '2');
+        
+        const response = await fetch('https://api.ocr.space/parse/image', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.ParsedResults && result.ParsedResults.length > 0) {
+            const text = result.ParsedResults[0].ParsedText;
+            console.log('OCR:', text);
             
-            status.textContent = '🔍 Reading numbers with OCR...';
+            const size = gridSizes[currentSizeIndex];
+            const grid = parseOCRText(text, size.rows, size.cols);
             
-            // Use OCR.space API - free tier, works from GitHub Pages
-            const formData = new FormData();
-            formData.append('base64Image', base64Image);
-            formData.append('apikey', 'helloworld');
-            formData.append('language', 'eng');
-            formData.append('isOverlayRequired', 'false');
-            formData.append('OCREngine', '2');
-            formData.append('detectOrientation', 'true');
-            formData.append('scale', 'true');
-            
-            const response = await fetch('https://api.ocr.space/parse/image', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (result.IsErroredOnProcessing) {
-                throw new Error(result.ErrorMessage || 'OCR processing failed');
-            }
-            
-            if (result.ParsedResults && result.ParsedResults.length > 0) {
-                const text = result.ParsedResults[0].ParsedText;
-                console.log('OCR Result:', text);
+            if (grid) {
+                originalGrid = grid;
+                solution = solvePuzzle(grid);
+                currentStep = 0;
                 
-                // Parse the text to extract grid
-                const size = gridSizes[currentSizeIndex];
-                const grid = parseOCRText(text, size.rows, size.cols);
-                
-                if (grid) {
-                    status.textContent = '✅ Grid detected! Solving puzzle...';
-                    originalGrid = grid;
-                    solution = solvePuzzle(grid);
-                    currentStep = 0;
-                    
-                    setTimeout(() => {
-                        status.style.display = 'none';
-                        gridDisplay.style.display = 'block';
-                        renderGrid();
-                    }, 500);
-                } else {
-                    throw new Error('Could not parse grid. Please ensure the image is clear and try manual input.');
-                }
+                status.style.display = 'none';
+                gridDisplay.style.display = 'block';
+                renderGrid();
             } else {
-                throw new Error('No text detected in image');
+                throw new Error('Could not parse grid');
             }
-        } catch (err) {
-            console.error('OCR Error:', err);
-            throw new Error(err.message || 'OCR processing failed');
-        }
-    }
-                throw new Error('Could not parse grid from image. Please try manual input - it\'s faster anyway!');
-            }
-        } catch (err) {
-            console.error('OCR Error:', err);
-            throw new Error('OCR processing failed. Please use manual input.');
+        } else {
+            throw new Error('No text detected');
         }
     }
     
     function parseOCRText(text, expectedRows, expectedCols) {
-        // Extract all digits from the text
         const allDigits = text.match(/\d/g);
+        if (!allDigits || allDigits.length < expectedRows * expectedCols) return null;
         
-        if (!allDigits || allDigits.length < expectedRows * expectedCols) {
-            return null;
-        }
-        
-        // Build grid from digits
         const grid = [];
         let index = 0;
         
@@ -426,47 +419,17 @@ Cancel
             const row = [];
             for (let c = 0; c < expectedCols; c++) {
                 if (index < allDigits.length) {
-                    row.push(parseInt(allDigits[index]));
-                    index++;
+                    row.push(parseInt(allDigits[index++]));
                 }
             }
-            if (row.length === expectedCols) {
-                grid.push(row);
-            }
+            if (row.length === expectedCols) grid.push(row);
         }
         
-        // Validate grid
-        if (grid.length === expectedRows && grid.every(row => row.length === expectedCols)) {
-            return grid;
-        }
-        
-        return null;
+        return grid.length === expectedRows ? grid : null;
     }
     
-    // Grid size cycling
-    gridSizeBtn.addEventListener('click', () => {
-        currentSizeIndex = (currentSizeIndex + 1) % 3;
-        const size = gridSizes[currentSizeIndex];
-        gridSizeBtn.textContent = size.label;
-        inputInstructions.textContent = `Enter ${size.rows} rows of ${size.cols} numbers each. Separate numbers with spaces, press Enter for next row.`;
-    });
-    
-    // Show manual input
-    manualInputBtn.addEventListener('click', () => {
-        manualInputSection.style.display = 'block';
-        uploadSection.style.display = 'none';
-        gridInput.focus();
-    });
-    
-    // Cancel manual input
-    cancelBtn.addEventListener('click', () => {
-        manualInputSection.style.display = 'none';
-        uploadSection.style.display = 'block';
-        gridInput.value = '';
-    });
-    
-    // Solve puzzle
-    solveBtn.addEventListener('click', () => {
+    // Solve button
+    solveBtn.onclick = function() {
         const text = gridInput.value.trim();
         if (!text) {
             alert('Please enter the grid numbers');
@@ -481,9 +444,8 @@ Cancel
             
             const size = gridSizes[currentSizeIndex];
             
-            // Validate
             if (grid.length !== size.rows) {
-                alert(`Expected ${size.rows} rows, but got ${grid.length}`);
+                alert(`Expected ${size.rows} rows, got ${grid.length}`);
                 return;
             }
             
@@ -492,12 +454,6 @@ Cancel
                 return;
             }
             
-            if (grid.some(row => row.some(n => isNaN(n) || n < 0 || n > 9))) {
-                alert('All numbers should be between 0 and 9');
-                return;
-            }
-            
-            // Process the grid
             originalGrid = grid;
             solution = solvePuzzle(grid);
             currentStep = 0;
@@ -507,28 +463,21 @@ Cancel
             renderGrid();
             
         } catch (err) {
-            alert('Error parsing grid: ' + err.message);
+            alert('Error: ' + err.message);
         }
-    });
+    };
     
-    // Solve puzzle algorithm
     function solvePuzzle(initialGrid) {
         const steps = [];
         let currentGrid = initialGrid.map(row => [...row]);
         let iterations = 0;
-        const maxIterations = 1000;
         
-        while (iterations < maxIterations) {
+        while (iterations < 1000) {
             const move = findBestMove(currentGrid);
-            
             if (!move) break;
             
-            steps.push({
-                cells: move.cells,
-                sum: move.sum
-            });
+            steps.push({ cells: move.cells, sum: move.sum });
             
-            // Remove cells
             for (let cell of move.cells) {
                 currentGrid[cell.row][cell.col] = null;
             }
@@ -544,7 +493,7 @@ Cancel
         const cols = grid[0].length;
         const allMoves = [];
         
-        // Horizontal groups
+        // Horizontal
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 if (grid[r][c] === null) continue;
@@ -570,7 +519,7 @@ Cancel
             }
         }
         
-        // Vertical groups
+        // Vertical
         for (let c = 0; c < cols; c++) {
             for (let r = 0; r < rows; r++) {
                 if (grid[r][c] === null) continue;
@@ -596,7 +545,7 @@ Cancel
             }
         }
         
-        // Rectangular groups
+        // Rectangles
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 if (grid[r][c] === null) continue;
@@ -628,7 +577,6 @@ Cancel
         }
         
         if (allMoves.length === 0) return null;
-        
         allMoves.sort((a, b) => b.cells.length - a.cells.length);
         return allMoves[0];
     }
@@ -656,66 +604,67 @@ Cancel
         const cols = displayGrid[0].length;
         const cellSize = window.innerWidth < 768 ? 30 : 40;
         
-        gridContainer.innerHTML = `
-            <div class="grid-container">
-                <div class="grid" style="grid-template-columns: repeat(${cols}, ${cellSize}px);">
-                    ${displayGrid.map((row, r) => 
-                        row.map((cell, c) => {
-                            const isHighlighted = highlighted.some(h => h.row === r && h.col === c);
-                            const isRemoved = cell === null;
-                            const classes = `cell ${isHighlighted ? 'highlighted' : ''} ${isRemoved ? 'removed' : ''}`;
-                            return `<div class="${classes}" style="width: ${cellSize}px; height: ${cellSize}px; font-size: ${cellSize === 30 ? 14 : 16}px;">${cell !== null ? cell : ''}</div>`;
-                        }).join('')
-                    ).join('')}
-                </div>
-            </div>
-        `;
+        let html = '<div class="grid-container"><div class="grid" style="grid-template-columns: repeat(' + cols + ', ' + cellSize + 'px);">';
         
-        // Update step info
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const cell = displayGrid[r][c];
+                const isHighlighted = highlighted.some(h => h.row === r && h.col === c);
+                const isRemoved = cell === null;
+                
+                let classes = 'cell';
+                if (isHighlighted) classes += ' highlighted';
+                if (isRemoved) classes += ' removed';
+                
+                html += '<div class="' + classes + '" style="width:' + cellSize + 'px;height:' + cellSize + 'px;font-size:' + (cellSize === 30 ? 14 : 16) + 'px">';
+                html += (cell !== null ? cell : '');
+                html += '</div>';
+            }
+        }
+        
+        html += '</div></div>';
+        gridContainer.innerHTML = html;
+        
         if (currentStep < solution.length) {
             const move = solution[currentStep];
             const numbers = move.cells.map(c => originalGrid[c.row][c.col]).join(' + ');
-            stepInfo.innerHTML = `Step <strong>${currentStep + 1}</strong> of <strong>${solution.length}</strong><br>
-                <div style="margin-top: 10px; font-size: 16px;">Remove: ${numbers} = 10</div>`;
+            stepInfo.innerHTML = 'Step <strong>' + (currentStep + 1) + '</strong> of <strong>' + solution.length + '</strong><br><div style="margin-top: 10px; font-size: 16px;">Remove: ' + numbers + ' = 10</div>';
         } else {
-            stepInfo.innerHTML = `<div style="color: #2e7d32; font-size: 18px;">✅ Puzzle solved! Cleared ${solution.length} groups.</div>`;
+            stepInfo.innerHTML = '<div style="color: #2e7d32; font-size: 18px;">✅ Puzzle solved! Cleared ' + solution.length + ' groups.</div>';
         }
         
-        // Update buttons
         resetBtn.disabled = currentStep === 0;
         prevBtn.disabled = currentStep === 0;
         nextBtn.disabled = currentStep >= solution.length;
     }
     
-    resetBtn.addEventListener('click', () => {
+    resetBtn.onclick = function() {
         currentStep = 0;
         renderGrid();
-    });
+    };
     
-    prevBtn.addEventListener('click', () => {
+    prevBtn.onclick = function() {
         if (currentStep > 0) {
             currentStep--;
             renderGrid();
         }
-    });
+    };
     
-    nextBtn.addEventListener('click', () => {
+    nextBtn.onclick = function() {
         if (currentStep < solution.length) {
             currentStep++;
             renderGrid();
         }
-    });
+    };
     
-    newPuzzleBtn.addEventListener('click', () => {
+    newPuzzleBtn.onclick = function() {
         originalGrid = null;
         solution = [];
         currentStep = 0;
         gridInput.value = '';
         gridDisplay.style.display = 'none';
         uploadSection.style.display = 'block';
-    });
-    
-    }); // End DOMContentLoaded
+    };
 </script>
 ```
 
